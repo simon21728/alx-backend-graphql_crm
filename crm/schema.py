@@ -12,7 +12,7 @@ CUSTOMERS = [
 ]
 
 class Query(graphene.ObjectType):
-    all_customers = graphene.List(CustomerType)
+    hello = graphene.String(description="A simple hello world field")
 
-    def resolve_all_customers(root, info):
-        return [CustomerType(**customer) for customer in CUSTOMERS]
+    def resolve_hello(root, info):
+        return "Hello, GraphQL!"
