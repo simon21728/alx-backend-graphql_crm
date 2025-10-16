@@ -1,6 +1,7 @@
 import graphene
 from graphene_django import DjangoObjectType
-from django.db import transaction, IntegrityError
+from django.db import IntegrityError
+from django.utils import timezone
 from .models import Customer, Product, Order
 
 # ----------------------------
@@ -17,34 +18,52 @@ class ProductType(DjangoObjectType):
 class OrderType(DjangoObjectType):
     class Meta:
         model = Order
-        
+
+# ----------------------------
+# Input Types
+# ----------------------------
 class CustomerInput(graphene.InputObjectType):
     name = graphene.String(required=True)
     email = graphene.String(required=True)
     phone = graphene.String()
+
+class ProductInput(graphene.InputObjectType):
+    name = graphene.String(required=True)
+    price = graphene.Float(required=True)
+    stock = graphene.Int(default_value=0)
+
+class OrderInput(graphene.InputObjectType):
+    customer_id = graphene.ID(required=True)
+    product_ids = graphene.List(graphene.ID, required=True)
+    order_date = graphene.DateTime()
+
 # ----------------------------
 # Mutations
 # ----------------------------
 class CreateCustomer(graphene.Mutation):
     class Arguments:
-        name = graphene.String(required=True)
-        email = graphene.String(required=True)
-        phone = graphene.String()
+        input = CustomerInput(required=True)
 
     customer = graphene.Field(CustomerType)
     message = graphene.String()
 
-    def mutate(root, info, name, email, phone=None):
+    @classmethod
+    def mutate(cls, root, info, input):
         try:
-            customer = Customer.objects.create(name=name, email=email, phone=phone)
+            customer = Customer.objects.create(
+                name=input.name,
+                email=input.email,
+                phone=input.phone
+            )
             return CreateCustomer(customer=customer, message="Customer created successfully")
         except IntegrityError:
             return CreateCustomer(customer=None, message="Email already exists")
-
+        except Exception as e:
+            return CreateCustomer(customer=None, message=str(e))
 
 class BulkCreateCustomers(graphene.Mutation):
     class Arguments:
-           input = graphene.List(graphene.NonNull(CustomerInput), required=True)
+        input = graphene.List(graphene.NonNull(CustomerInput), required=True)
 
     customers = graphene.List(CustomerType)
     errors = graphene.List(graphene.String)
@@ -55,58 +74,66 @@ class BulkCreateCustomers(graphene.Mutation):
         errors = []
         for data in input:
             try:
-                customer = Customer.objects.create(**data)
+                customer = Customer.objects.create(
+                    name=data.name,
+                    email=data.email,
+                    phone=data.phone
+                )
                 created_customers.append(customer)
             except IntegrityError:
-                errors.append(f"Email {data['email']} already exists")
+                errors.append(f"Email {data.email} already exists")
             except Exception as e:
                 errors.append(str(e))
         return BulkCreateCustomers(customers=created_customers, errors=errors)
 
-
 class CreateProduct(graphene.Mutation):
     class Arguments:
-        name = graphene.String(required=True)
-        price = graphene.Float(required=True)
-        stock = graphene.Int()
+        input = ProductInput(required=True)
 
     product = graphene.Field(ProductType)
+    message = graphene.String()
 
-    def mutate(root, info, name, price, stock=0):
-        if price <= 0:
-            raise Exception("Price must be positive")
-        if stock < 0:
-            raise Exception("Stock cannot be negative")
-        product = Product.objects.create(name=name, price=price, stock=stock)
-        return CreateProduct(product=product)
-
+    @classmethod
+    def mutate(cls, root, info, input):
+        if input.price <= 0:
+            return CreateProduct(product=None, message="Price must be positive")
+        if input.stock < 0:
+            return CreateProduct(product=None, message="Stock cannot be negative")
+        product = Product.objects.create(
+            name=input.name,
+            price=input.price,
+            stock=input.stock
+        )
+        return CreateProduct(product=product, message="Product created successfully")
 
 class CreateOrder(graphene.Mutation):
     class Arguments:
-        customer_id = graphene.ID(required=True)
-        product_ids = graphene.List(graphene.ID, required=True)
-        order_date = graphene.DateTime()
+        input = OrderInput(required=True)
 
     order = graphene.Field(OrderType)
+    message = graphene.String()
 
-    def mutate(root, info, customer_id, product_ids, order_date=None):
+    @classmethod
+    def mutate(cls, root, info, input):
         try:
-            customer = Customer.objects.get(pk=customer_id)
+            customer = Customer.objects.get(pk=input.customer_id)
         except Customer.DoesNotExist:
-            raise Exception("Invalid customer ID")
+            return CreateOrder(order=None, message="Invalid customer ID")
 
-        products = Product.objects.filter(id__in=product_ids)
+        products = Product.objects.filter(pk__in=input.product_ids)
         if not products.exists():
-            raise Exception("No valid products provided")
+            return CreateOrder(order=None, message="No valid products provided")
 
+        order_date = input.order_date or timezone.now()
         order = Order.objects.create(customer=customer, order_date=order_date)
         order.products.set(products)
         order.total_amount = sum([p.price for p in products])
         order.save()
-        return CreateOrder(order=order)
+
+        return CreateOrder(order=order, message="Order created successfully")
 
 # ----------------------------
-# Combine Mutations
+# Mutation Class
 # ----------------------------
 class Mutation(graphene.ObjectType):
     create_customer = CreateCustomer.Field()
@@ -115,7 +142,7 @@ class Mutation(graphene.ObjectType):
     create_order = CreateOrder.Field()
 
 # ----------------------------
-# Define Query (optional, for testing)
+# Query Class
 # ----------------------------
 class Query(graphene.ObjectType):
     all_customers = graphene.List(CustomerType)
