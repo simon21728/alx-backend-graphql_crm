@@ -4,6 +4,14 @@ from graphene_django.filter import DjangoFilterConnectionField
 from .models import Customer, Product, Order
 from .filters import CustomerFilter, ProductFilter, OrderFilter
 
+
+# crm/schema.py
+import graphene
+
+class CRMQuery(graphene.ObjectType):
+    # Placeholder for future CRM queries
+    pass
+
 # ----------------------------
 # Node Types
 # ----------------------------
