@@ -38,7 +38,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'crm',
-    'graphene_django',
+    'graphene-django',
     'django_filters',
 ]
 
