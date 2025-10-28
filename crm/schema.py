@@ -5,6 +5,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from .models import Customer, Product, Order
 import re
+from crm.models import Product   
 
 # ---------------- GraphQL Types ----------------
 
