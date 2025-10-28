@@ -8,6 +8,39 @@ import re
 
 # ---------------- GraphQL Types ----------------
 
+class ProductType(DjangoObjectType):
+    class Meta:
+        model = Product
+        fields = ("id", "name", "stock")
+
+
+class UpdateLowStockProducts(graphene.Mutation):
+    class Arguments:
+        pass  # no arguments needed
+
+    success = graphene.Boolean()
+    message = graphene.String()
+    updated_products = graphene.List(ProductType)
+
+    def mutate(self, info):
+        low_stock_products = Product.objects.filter(stock__lt=10)
+        updated = []
+
+        for product in low_stock_products:
+            product.stock += 10
+            product.save()
+            updated.append(product)
+
+        message = f"{len(updated)} product(s) restocked successfully."
+        return UpdateLowStockProducts(success=True, message=message, updated_products=updated)
+
+
+class Mutation(graphene.ObjectType):
+    update_low_stock_products = UpdateLowStockProducts.Field()
+
+
+schema = graphene.Schema(mutation=Mutation)
+
 class CustomerType(DjangoObjectType):
     class Meta:
         model = Customer
