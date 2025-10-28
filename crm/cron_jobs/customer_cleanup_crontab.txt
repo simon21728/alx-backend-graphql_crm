@@ -1,0 +1,1 @@
+0 2 * * 0 /path/bayus@simon MINGW64 ~/OneDrive/Desktop/alx-backend-python/alx-backend-graphql_cr/crm/cron_jobs/clean_inactive_customers.sh
